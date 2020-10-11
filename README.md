@@ -1,0 +1,2 @@
+# rcol
+Automatic log colorizer
