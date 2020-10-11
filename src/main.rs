@@ -2,6 +2,7 @@ use clap::Clap;
 use std::{io, io::prelude::*};
 use std::collections::HashMap;
 use regex::Regex;
+use ansi_term::Colour::Fixed;
 
 #[derive(Clap, Debug)]
 #[clap(version = "0.1", author = "Niklas Thorne <notrupertthorne AT gmail>")]
@@ -14,7 +15,7 @@ struct Opts {
     column: u32
 }
 
-type Color = u32;
+type Color = u8;
 type ColorMap = HashMap<String, Color>;
 type ColorScheme = Vec<Color>;
 
@@ -47,18 +48,17 @@ fn parse_line(
 
 fn main() {
     let opts = Opts::parse();
-    println!("{:?}", opts);
 
     let mut color_map = ColorMap::new();
-    // TODO: Replace with colorscheme..
-    let mut color_scheme: Vec<Color> = [1, 2, 3, 4].to_vec();
+    let mut color_scheme = (1..255).collect::<Vec<u8>>();
 
     let rex = Regex::new(opts.delimiter.as_str()).unwrap();
 
     if opts.input == "-" {
         for line in io::stdin().lock().lines() {
             if let Ok(l) = line {
-                let _color = parse_line(&l, &rex, opts.column, &mut color_map, &mut color_scheme);
+                let color = parse_line(&l, &rex, opts.column, &mut color_map, &mut color_scheme);
+                println!("{}", Fixed(color).paint(l));
             } else {
                 println!("Failed to read line");
             }
