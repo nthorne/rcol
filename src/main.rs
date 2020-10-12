@@ -24,25 +24,26 @@ fn parse_line(
     delimiter: &Regex,
     column: u32,
     map: &mut ColorMap,
-    color_scheme: &mut ColorScheme) -> Color {
+    color_scheme: &mut ColorScheme) -> Option<Color> {
 
     let results = delimiter.split(line).collect::<Vec<&str>>();
 
-    // Allow this one to assert for now..
-    let key = results.get(column as usize).unwrap().clone();
+    if let Some(key) = results.get(column as usize) {
+        match map.get(key.clone()) {
+            None => {
+                let color = color_scheme[0];
 
-    match map.get(key) {
-        None => {
-            let color = color_scheme[0];
+                if 1 < color_scheme.len() {
+                    map.insert(key.to_string(), color);
+                    color_scheme.remove(0);
+                }
 
-            if 1 < color_scheme.len() {
-                map.insert(key.to_string(), color);
-                color_scheme.remove(0);
+                Some(color)
             }
-
-            color
+            Some(val) => Some(*val)
         }
-        Some(val) => *val
+    } else {
+        None
     }
 }
 
@@ -57,8 +58,11 @@ fn main() {
     if opts.input == "-" {
         for line in io::stdin().lock().lines() {
             if let Ok(l) = line {
-                let color = parse_line(&l, &rex, opts.column, &mut color_map, &mut color_scheme);
-                println!("{}", Fixed(color).paint(l));
+                if let Some(color) = parse_line(&l, &rex, opts.column, &mut color_map, &mut color_scheme) {
+                    println!("{}", Fixed(color).paint(l));
+                } else {
+                    println!("{}", l);
+                }
             } else {
                 println!("Failed to read line");
             }
@@ -82,7 +86,7 @@ mod tests {
         color_map.insert("keyword".to_string(), 1);
         let mut color_scheme: Vec<Color> = [2, 3, 4].to_vec();
 
-        assert_eq!(parse_line("word key word", &delimiter, column, &mut color_map, &mut color_scheme), 2);
+        assert_eq!(parse_line("word key word", &delimiter, column, &mut color_map, &mut color_scheme), Some(2));
         assert_eq!(color_map.len(), 2);
         assert_eq!(color_scheme, [3, 4]);
     }
@@ -97,7 +101,7 @@ mod tests {
         color_map.insert("key".to_string(), 1);
         let mut color_scheme: Vec<Color> = [2, 3, 4].to_vec();
 
-        assert_eq!(parse_line("word key word", &delimiter, column, &mut color_map, &mut color_scheme), 1);
+        assert_eq!(parse_line("word key word", &delimiter, column, &mut color_map, &mut color_scheme), Some(1));
         assert_eq!(color_map.len(), 1);
         assert_eq!(color_scheme, [2, 3, 4]);
     }
@@ -112,7 +116,21 @@ mod tests {
         color_map.insert("keyword".to_string(), 1);
         let mut color_scheme: Vec<Color> = [2].to_vec();
 
-        assert_eq!(parse_line("word key word", &delimiter, column, &mut color_map, &mut color_scheme), 2);
+        assert_eq!(parse_line("word key word", &delimiter, column, &mut color_map, &mut color_scheme), Some(2));
+        assert_eq!(color_map.len(), 1);
+        assert_eq!(color_scheme, [2]);
+    }
+
+    #[test]
+    // Make sure that we handle invalid column gracefully
+    fn invalid_column() {
+        let delimiter = Regex::new(r"[ \t]+").unwrap();
+        let column = 4;
+        let mut color_map = ColorMap::new();
+        color_map.insert("keyword".to_string(), 1);
+        let mut color_scheme: Vec<Color> = [2].to_vec();
+
+        assert_eq!(parse_line("word key word", &delimiter, column, &mut color_map, &mut color_scheme), None);
         assert_eq!(color_map.len(), 1);
         assert_eq!(color_scheme, [2]);
     }
