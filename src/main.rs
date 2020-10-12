@@ -11,8 +11,12 @@ struct Opts {
     input: String,
     #[clap(short, long, default_value="[ \t]+", about="The column delimiter to use.")]
     delimiter: String,
-    #[clap(short, long, default_value="0", about="Which column to utilize for colorization")]
-    column: u32
+    #[clap(short, long, default_value="0", about="Which column to utilize for colorization.")]
+    column: u32,
+    #[clap(short, long, default_value="8,10,11,16,17,18,19,52,54", about="Comma separated list of colors to filter out.")]
+    filter: String,
+    #[clap(long, about="Add debugging prints for e.g. building color filter.")]
+    debug: bool
 }
 
 type Color = u8;
@@ -51,7 +55,15 @@ fn main() {
     let opts = Opts::parse();
 
     let mut color_map = ColorMap::new();
-    let mut color_scheme = (1..255).collect::<Vec<u8>>();
+
+    let color_filter = opts.filter
+        .split(",")
+        .map(|v| v.parse::<u8>().unwrap())
+        .collect::<Vec<u8>>();
+
+    let mut color_scheme = (1..255)
+        .filter(|e| !color_filter.iter().any(|f| f == e))
+        .collect();
 
     let rex = Regex::new(opts.delimiter.as_str()).unwrap();
 
@@ -59,7 +71,11 @@ fn main() {
         for line in io::stdin().lock().lines() {
             if let Ok(l) = line {
                 if let Some(color) = parse_line(&l, &rex, opts.column, &mut color_map, &mut color_scheme) {
-                    println!("{}", Fixed(color).paint(l));
+                    if opts.debug {
+                        println!("{}: {}", color, Fixed(color).paint(l));
+                    } else {
+                        println!("{}", Fixed(color).paint(l));
+                    }
                 } else {
                     println!("{}", l);
                 }
