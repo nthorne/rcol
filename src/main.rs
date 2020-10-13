@@ -1,8 +1,9 @@
 use clap::Clap;
-use std::{io, io::prelude::*};
+use std::{io, io::BufReader, io::prelude::*};
 use std::collections::HashMap;
 use regex::Regex;
 use ansi_term::Colour::Fixed;
+use std::fs::File;
 
 #[derive(Clap, Debug)]
 #[clap(version = "0.1", author = "Niklas Thorne <notrupertthorne AT gmail>")]
@@ -51,6 +52,18 @@ fn parse_line(
     }
 }
 
+fn print_line(line: &String, color: Option<u8>, debug: bool) {
+    if let Some(c) = color {
+        if debug {
+            println!("{}: {}", c, Fixed(c).paint(line));
+        } else {
+            println!("{}", Fixed(c).paint(line));
+        }
+    } else {
+        println!("{}", line);
+    }
+}
+
 fn main() {
     let opts = Opts::parse();
 
@@ -70,17 +83,21 @@ fn main() {
     if opts.input == "-" {
         for line in io::stdin().lock().lines() {
             if let Ok(l) = line {
-                if let Some(color) = parse_line(&l, &rex, opts.column, &mut color_map, &mut color_scheme) {
-                    if opts.debug {
-                        println!("{}: {}", color, Fixed(color).paint(l));
-                    } else {
-                        println!("{}", Fixed(color).paint(l));
-                    }
-                } else {
-                    println!("{}", l);
-                }
+                print_line(&l, parse_line(&l, &rex, opts.column, &mut color_map, &mut color_scheme), opts.debug);
             } else {
                 println!("Failed to read line");
+            }
+        }
+    } else {
+        if let Ok(file) = File::open(opts.input) {
+            let reader = BufReader::new(file);
+
+            for line in reader.lines() {
+                if let Ok(l) = line {
+                    print_line(&l, parse_line(&l, &rex, opts.column, &mut color_map, &mut color_scheme), opts.debug);
+                } else {
+                    println!("Failed to read line");
+                }
             }
         }
     }
