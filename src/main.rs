@@ -1,22 +1,33 @@
-use clap::Clap;
+use structopt::StructOpt;
 use std::{io, io::BufReader, io::prelude::*};
 use std::collections::HashMap;
 use regex::Regex;
 use ansi_term::Colour::Fixed;
 use std::fs::File;
 
-#[derive(Clap, Debug)]
-#[clap(version = "0.1", author = "Niklas Thorne <notrupertthorne AT gmail>")]
+#[derive(StructOpt, Debug)]
+#[structopt(
+    author = "Niklas Thorne <notrupertthorne AT gmail>",
+    about="Colorize lines from a file, or stdin, by grouping lines according to a given delimiter and column.")]
 struct Opts {
-    #[clap(name="INPUT", default_value="-", about="Input file to colorize. Defaults to stdin.")]
+    /// Input file to colorize. Defaults to stdin.
+    #[structopt(name="INPUT", default_value="-")]
     input: String,
-    #[clap(short, long, default_value="[ \t]+", about="The column delimiter to use.")]
+
+    /// The column delimiter to use.
+    #[structopt(short, long, default_value="[ \t]+")]
     delimiter: String,
-    #[clap(short, long, default_value="0", about="Which column to utilize for colorization.")]
+
+    /// Which column to utilize for colorization.
+    #[structopt(short, long, default_value="0")]
     column: u32,
-    #[clap(short, long, default_value="8,10,11,16,17,18,19,52,54", about="Comma separated list of colors to filter out.")]
+
+    /// List of colors to not use when coloring.
+    #[structopt(short, long, default_value="8,10,11,16,17,18,19,52,54")]
     filter: String,
-    #[clap(long, about="Add debugging prints for e.g. building color filter.")]
+
+    /// Add debugging prints for e.g. building color filter.
+    #[structopt(long)]
     debug: bool
 }
 
@@ -65,7 +76,7 @@ fn print_line(line: &String, color: Option<u8>, debug: bool) {
 }
 
 fn main() {
-    let opts = Opts::parse();
+    let opts = Opts::from_args();
 
     let mut color_map = ColorMap::new();
 
