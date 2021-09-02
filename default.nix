@@ -5,7 +5,7 @@ rustPlatform.buildRustPackage rec {
 
   src = ./.;
 
-  cargoSha256 = "1ld1yf6hflr1klzvbz6gi2r2mp5b2rzjaq8br7lqxpczvjyc4vid";
+  cargoSha256 = "1pqc76ffcyk393vic72k1cy2nmrxgz4icmrxar1a935ry9jzci4n";
 
   meta = with stdenv.lib; {
     description = "Automatic log colorizer.";

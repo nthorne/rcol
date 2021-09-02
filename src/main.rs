@@ -4,30 +4,55 @@ use std::collections::HashMap;
 use regex::Regex;
 use ansi_term::Colour::Fixed;
 use std::fs::File;
+use serde::{Deserialize, Serialize};
+
+
+mod build_result {
+    // Include build script containing e.g. config path.
+    include!(concat!(env!("OUT_DIR"), "/build_result.rs"));
+}
+
+
+/// This type represents the configuration file data.
+#[derive(Serialize, Deserialize)]
+struct Config {
+    delimiter: String,
+    column: u32,
+    filter: String,
+}
 
 #[derive(StructOpt, Debug)]
 #[structopt(
     author = "Niklas Thorne <notrupertthorne AT gmail>",
-    about="Colorize lines from a file, or stdin, by grouping lines according to a given delimiter and column.")]
+    about = build_result::ABOUT_STRING)]
 struct Opts {
     /// Input file to colorize. Defaults to stdin.
-    #[structopt(name="INPUT", default_value="-")]
-    input: String,
+    #[structopt(name="INPUT")]
+    input: Option<String>,
 
-    /// The column delimiter to use.
-    #[structopt(short, long, default_value="[ \t]+")]
-    delimiter: String,
+    /// The column delimiter to use. Default config value is "[ \t]+".
+    #[structopt(short, long,)]
+    delimiter: Option<String>,
 
-    /// Which column to utilize for colorization.
-    #[structopt(short, long, default_value="0")]
-    column: u32,
+    /// Which column to utilize for colorization. Default config value is 0.
+    #[structopt(short, long)]
+    column: Option<u32>,
 
-    /// List of colors to not use when coloring.
-    #[structopt(short, long, default_value="8,10,11,16,17,18,19,52,54")]
-    filter: String,
+    /// List of colors to not use when coloring. Default config value is "8,10,11,16,17,18,19,52,54".
+    #[structopt(short, long)]
+    filter: Option<String>,
 
     /// Add debugging prints for e.g. building color filter.
     #[structopt(long)]
+    debug: bool
+}
+
+/// This type represents the union of the Config type and the Opts type.
+struct MergedOpts {
+    input: Option<String>,
+    delimiter: Regex,
+    column: u32,
+    filter: String,
     debug: bool
 }
 
@@ -35,6 +60,59 @@ type Color = u8;
 type ColorMap = HashMap<String, Color>;
 type ColorScheme = Vec<Color>;
 
+
+
+impl ::std::default::Default for Config {
+    /// These are the default configuration values in case of non-existing config file,
+    /// which is the case at least at the first start up of the application.
+    fn default() -> Self {
+        Self {
+            delimiter: "[ \t]+".to_string(),
+            column: 0,
+            filter: "8,10,11,16,17,18,19,52,54".to_string(),
+        }
+    }
+}
+
+impl MergedOpts {
+    /// Creates the union of the command line options and
+    /// the configuration file values.
+    fn new() -> Self {
+        let opts = Opts::from_args();
+        let config = load_config();
+
+        Self {
+            input : opts.input,
+
+            delimiter : if let Some(delimiter) = &opts.delimiter {
+                Regex::new(delimiter.as_str()).unwrap()
+            } else {
+                Regex::new("[ \t]+").unwrap()
+            },
+
+            column: if let Some(column) = &opts.column {
+                *column
+            } else {
+                config.column
+            },
+
+            filter: if let Some(filter) = &opts.filter {
+                filter.to_string()
+            } else {
+                config.filter
+            },
+
+            debug: opts.debug,
+        }
+    }
+}
+
+
+/// Parses a line, and applies colors from the color scheme, based on
+/// which color group the line should belong to. The color group is selected
+/// by splitting the line into columns, and using the supplied column id
+/// to map the token to a color (or pick the next available color if token
+/// has not been encountered yet().
 fn parse_line(
     line: &str,
     delimiter: &Regex,
@@ -63,6 +141,7 @@ fn parse_line(
     }
 }
 
+/// Prints a line on stdout using the selected color.
 fn print_line(line: &String, color: Option<u8>, debug: bool) {
     if let Some(c) = color {
         if debug {
@@ -75,8 +154,17 @@ fn print_line(line: &String, color: Option<u8>, debug: bool) {
     }
 }
 
+/// Loads the configuration file, based on the cargo application name. If the
+/// file does not exist, a default one will be created based on the default
+/// values of the Config type.
+fn load_config() -> Config {
+    let name = option_env!("CARGO_PKG_NAME").unwrap();
+    return confy::load(name).unwrap();
+}
+
+
 fn main() {
-    let opts = Opts::from_args();
+    let opts = MergedOpts::new();
 
     let mut color_map = ColorMap::new();
 
@@ -89,26 +177,24 @@ fn main() {
         .filter(|e| !color_filter.iter().any(|f| f == e))
         .collect();
 
-    let rex = Regex::new(opts.delimiter.as_str()).unwrap();
-
-    if opts.input == "-" {
-        for line in io::stdin().lock().lines() {
-            if let Ok(l) = line {
-                print_line(&l, parse_line(&l, &rex, opts.column, &mut color_map, &mut color_scheme), opts.debug);
-            } else {
-                println!("Failed to read line");
-            }
-        }
-    } else {
-        if let Ok(file) = File::open(opts.input) {
+    if let Some(file_name) = opts.input {
+        if let Ok(file) = File::open(file_name) {
             let reader = BufReader::new(file);
 
             for line in reader.lines() {
                 if let Ok(l) = line {
-                    print_line(&l, parse_line(&l, &rex, opts.column, &mut color_map, &mut color_scheme), opts.debug);
+                    print_line(&l, parse_line(&l, &opts.delimiter, opts.column, &mut color_map, &mut color_scheme), opts.debug);
                 } else {
                     println!("Failed to read line");
                 }
+            }
+        }
+    } else {
+        for line in io::stdin().lock().lines() {
+            if let Ok(l) = line {
+                print_line(&l, parse_line(&l, &opts.delimiter, opts.column, &mut color_map, &mut color_scheme), opts.debug);
+            } else {
+                println!("Failed to read line");
             }
         }
     }

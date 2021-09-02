@@ -10,3 +10,10 @@ edition = "2018"
 structopt = "0.3.23"
 regex = "1.3.9"
 ansi_term = "0.12.1"
+confy = "0.4.0"
+serde = { version = "1.0", features = ["derive"] }
+
+# TODO: Once a new confy release is made, I can switch this for confy's
+#   path getter function.
+[build-dependencies]
+directories = "^2.0"
